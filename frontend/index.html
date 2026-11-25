@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AttentionDTA | Cancer Kinase Visualizer (Group 17)</title>
+  <!-- Modern Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Plotly.js for interactive scientific charts and heatmaps -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="logo-area">
+        <span class="logo-icon">🧬</span>
+        <div>
+          <h1>AttentionDTA: Cancer Kinase Visualizer</h1>
+          <p class="subtitle">Statistical Learning (DSC4804) · Group 17 · BML Munjal University</p>
+        </div>
+      </div>
+      <div class="badge-area">
+        <span class="badge badge-primary">Deep Learning</span>
+        <span class="badge badge-secondary">Davis Benchmark</span>
+        <span class="badge badge-success">Two-Sided Attention</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    
+    <!-- Control Panel Section -->
+    <section class="card control-card">
+      <div class="control-header">
+        <h2>🎯 Case Study & Input Configuration</h2>
+        <span id="backendStatus" class="status-indicator">Connecting to Backend...</span>
+      </div>
+
+      <div class="grid-controls">
+        <div class="form-group">
+          <label for="targetSelect">Select Cancer Target Profile:</label>
+          <select id="targetSelect" class="form-select">
+            <option value="0">Loading cancer targets...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="modeSelect">Evaluation Condition:</label>
+          <select id="modeSelect" class="form-select">
+            <option value="standard">Standard Model (S1 Random Split — R² ~ 0.69)</option>
+            <option value="cold_start">Cold-Start Model (Unseen Novel Drug — R² ~ -0.01)</option>
+          </select>
+        </div>
+
+        <div class="form-group action-group">
+          <button id="predictBtn" class="btn btn-primary">
+            <span class="btn-icon">⚡</span> Run Prediction & Attention
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible Sequence & SMILES Input -->
+      <details class="inputs-accordion" id="customInputDetails">
+        <summary>📝 View or Customize SMILES & Protein Sequence</summary>
+        <div class="custom-inputs-box">
+          <div class="form-group">
+            <label for="drugSmilesInput">Drug SMILES String (Ligand):</label>
+            <input type="text" id="drugSmilesInput" class="form-input font-mono" placeholder="e.g. COC1=C(C=C2C(=C1)N=CN=C2NC3=CC(=C(C=C3)F)Cl)...">
+          </div>
+          <div class="form-group">
+            <label for="proteinSeqInput">Target Kinase Amino Acid Sequence (FASTA):</label>
+            <textarea id="proteinSeqInput" class="form-textarea font-mono" rows="3" placeholder="e.g. MRPSGTAGAALLALLAALCPASRALEEKKVCQGTSNKLTQLGTFEDHFL..."></textarea>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- KPI Metric Cards Row -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-label">Predicted Affinity (pK_d)</span>
+        <div class="kpi-value" id="pkdValue">--</div>
+        <span class="kpi-subtext" id="pkdSubtext">Target: pK_d = -log10(K_d)</span>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">Equilibrium Constant (K_d)</span>
+        <div class="kpi-value" id="kdValue">--</div>
+        <span class="kpi-subtext">Nanomolar (Lower = Tighter)</span>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">Binding Potency</span>
+        <div class="kpi-value" id="potencyValue">--</div>
+        <span class="kpi-subtext" id="potencyBadge">Therapeutic Assessment</span>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">Generalization Mode</span>
+        <div class="kpi-value" id="conditionValue">Standard S1</div>
+        <span class="kpi-subtext" id="conditionStatus">Known Scaffolds</span>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="tabHeatmap">🔥 Two-Sided Attention Heatmap</button>
+      <button class="tab-btn" data-tab="tabSites">🎯 Binding Pocket & Pharmacophore</button>
+      <button class="tab-btn" data-tab="tabComparison">⚖️ Cold-Start Generalization</button>
+    </nav>
+
+    <!-- TAB 1: 2D ATTENTION HEATMAP -->
+    <div id="tabHeatmap" class="tab-content active">
+      <div class="card">
+        <div class="tab-header-row">
+          <div>
+            <h3>🔥 Pairwise Drug × Protein Cross-Attention Matrix</h3>
+            <p class="tab-desc">
+              Visualizes AttentionDTA's multi-head attention scores between individual chemical tokens of the drug and amino acid residues of the cancer protein.
+            </p>
+          </div>
+          <!-- Protein window slider -->
+          <div class="window-slider-box">
+            <label for="windowSlider">Protein Sequence Window: <span id="windowRangeLabel">0 - 60</span></label>
+            <input type="range" id="windowSlider" min="0" max="600" step="10" value="0">
+          </div>
+        </div>
+
+        <div id="heatmapPlot" class="plot-container"></div>
+        <p class="chart-caption">💡 <i>Tip: Hover over any matrix cell to see the exact protein residue, drug atom, and cross-attention weight.</i></p>
+      </div>
+    </div>
+
+    <!-- TAB 2: ACTIVE SITES & PHARMACOPHORES -->
+    <div id="tabSites" class="tab-content">
+      <div class="grid-two-cols">
+        <!-- Protein Active Residues -->
+        <div class="card">
+          <h3>🎯 1. Target Kinase Active Residues</h3>
+          <p class="tab-desc">Column-wise summation of attention matrix flags key amino acids in the catalytic cleft and ATP-binding pocket.</p>
+          <div id="proteinProfilePlot" class="small-plot"></div>
+          <h4>Top-5 Predicted Key Binding Residues</h4>
+          <div class="table-responsive">
+            <table class="data-table" id="proteinTopTable">
+              <thead>
+                <tr><th>Pos</th><th>Residue</th><th>Motif Context</th><th>Attention Score</th></tr>
+              </thead>
+              <tbody><tr><td colspan="4">Run prediction to view residues</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Drug Pharmacophore -->
+        <div class="card">
+          <h3>💊 2. Drug Pharmacophore Substructures</h3>
+          <p class="tab-desc">Row-wise summation of attention matrix highlights reactive chemical fragments and hinge-binding groups.</p>
+          <div id="drugProfilePlot" class="small-plot"></div>
+          <h4>Top-5 Predicted Active Chemical Fragments</h4>
+          <div class="table-responsive">
+            <table class="data-table" id="drugTopTable">
+              <thead>
+                <tr><th>Index</th><th>Atom</th><th>Fragment Substructure</th><th>Attention Score</th></tr>
+              </thead>
+              <tbody><tr><td colspan="4">Run prediction to view fragments</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: COLD-START COMPARISON -->
+    <div id="tabComparison" class="tab-content">
+      <div class="card">
+        <h3>⚖️ Generalization & Cold-Start Robustness on Davis Kinase Dataset</h3>
+        <p class="tab-desc">
+          Comparing our reproduced AttentionDTA implementation on the Davis dataset with published results, highlighting the steep drop under cold-start conditions.
+        </p>
+
+        <div class="table-responsive">
+          <table class="data-table benchmark-table" id="benchmarksTable">
+            <thead>
+              <tr>
+                <th>Evaluation Condition</th>
+                <th>Source</th>
+                <th>MSE (↓)</th>
+                <th>MAE (↓)</th>
+                <th>R² Score (↑)</th>
+                <th>Notes / Significance</th>
+              </tr>
+            </thead>
+            <tbody id="benchmarksBody">
+              <!-- Dynamically populated from backend -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid-two-cols" style="margin-top: 1.5rem;">
+          <div id="comparisonBarChart" class="small-plot"></div>
+          <div class="insights-box">
+            <h4>🔑 Key Scientific Takeaways</h4>
+            <ul>
+              <li><b>S1 Reproduction Confirmed:</b> Our reproduced model achieves an average $R^2 \approx 0.6853$ on Davis, directionally consistent with the published $0.7409$.</li>
+              <li><b>The Cold-Start Collapse:</b> When tested on 14 completely unseen drugs (drug-disjoint split), $R^2$ collapses to <b>-0.0079</b>.</li>
+              <li><b>Why This Matters:</b> Deep attention models often overfit to chemical scaffold identities in the training set rather than learning universal physical binding dynamics.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <p>Statistical Learning (DSC4804) · Group 17 · BML Munjal University</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

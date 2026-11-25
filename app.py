@@ -154,12 +154,11 @@ except Exception as e:
     st.stop()
 
 # --- MAIN DASHBOARD TABS ---
-tab_overview, tab_attention, tab_substructures, tab_comparison, tab_architecture = st.tabs([
+tab_overview, tab_attention, tab_substructures, tab_comparison = st.tabs([
     "📊 Binding Affinity & Results",
     "🔥 Two-Sided Attention Heatmap",
     "🎯 Binding Pockets & Pharmacophores",
-    "⚖️ Cold-Start Robustness Comparison",
-    "🧠 Model Architecture & Viva Notes"
+    "⚖️ Cold-Start Robustness Comparison"
 ])
 
 # ==================== TAB 1: OVERVIEW ====================
@@ -417,66 +416,6 @@ with tab_comparison:
         3. **Why this matters for Cancer Research:** Models with high standard accuracy often fail in real-world virtual screening because novel chemical leads do not resemble training molecules.
         """)
 
-# ==================== TAB 5: ARCHITECTURE & VIVA ====================
-with tab_architecture:
-    st.subheader("🧠 AttentionDTA Model Architecture & Flowchart")
-    
-    st.markdown("""
-    ```
-    ┌─────────────────────────┐               ┌─────────────────────────┐
-    │ Drug Input: SMILES      │               │ Target: Protein FASTA   │
-    │ (Length 100)            │               │ (Length 1200)           │
-    └───────────┬─────────────┘               └───────────┬─────────────┘
-                │ Label Encoding                          │ Label Encoding
-    ┌───────────▼─────────────┐               ┌───────────▼─────────────┐
-    │ Drug Embedding Layer    │               │ Protein Embedding Layer │
-    │ (128-d representation)  │               │ (128-d representation)  │
-    └───────────┬─────────────┘               └───────────┬─────────────┘
-                │                                         │
-    ┌───────────▼─────────────┐               ┌───────────▼─────────────┐
-    │ 3-Stage 1D-CNN Block    │               │ 3-Stage 1D-CNN Block    │
-    │ Filters: 32 -> 64 -> 96 │               │ Filters: 32 -> 64 -> 96 │
-    │ Kernels: 4, 6, 8        │               │ Kernels: 4, 8, 12       │
-    └───────────┬─────────────┘               └───────────┬─────────────┘
-                │ D ∈ R^(100 × 96)                        │ P ∈ R^(1200 × 96)
-                └───────────────────┬─────────────────────┘
-                                    │
-                    ┌───────────────▼───────────────┐
-                    │ Two-Sided Multi-Head Attention│
-                    │   A = tanh( W_d D · (W_p P)ᵀ) │
-                    │   α_drug = Row-wise sum       │
-                    │   α_prot = Col-wise sum       │
-                    └───────────────┬───────────────┘
-                                    │
-                    ┌───────────────▼───────────────┐
-                    │ Global Max Pooling & Concat   │
-                    │   [Max(D ⊙ α_d) ; Max(P ⊙ α_p)]
-                    └───────────────┬───────────────┘
-                                    │ Fused Vector (192-d)
-                    ┌───────────────▼───────────────┐
-                    │ 5-Layer MLP Regression Head   │
-                    │ Dense(1024) -> Dense(1024)    │
-                    │ -> Dense(512) -> Dense(1)     │
-                    └───────────────┬───────────────┘
-                                    │
-                             Predicted pK_d
-    ```
-    """)
-
-    st.markdown("---")
-    st.subheader("🎯 Viva / Oral Examination Quick Answers")
-    
-    with st.expander("Q1: What is the difference between DTI and DTA?"):
-        st.write("**Answer:** Drug-Target Interaction (DTI) is a binary classification problem (does it bind: yes or no). Drug-Target Affinity (DTA) is a regression problem predicting the exact physical binding strength (such as $pK_d$, $K_i$, or $IC_{50}$). DTA is more informative for cancer drug discovery because it tells how potent the drug is.")
-
-    with st.expander("Q2: Why does AttentionDTA perform better than DeepDTA?"):
-        st.write("**Answer:** DeepDTA uses 'late fusion'—it extracts drug and protein features independently and only concatenates them at the end. AttentionDTA uses a 'two-sided multi-head attention' mechanism that allows drug features and protein features to attend to each other during feature extraction, modeling pairwise interaction dynamics.")
-
-    with st.expander("Q3: What dataset did you use and why is it relevant to cancer?"):
-        st.write("**Answer:** We used the Davis dataset, which consists of 442 human kinase proteins and 68 small-molecule kinase inhibitors. Kinases regulate cellular signaling pathways, and mutated or overactive kinases are primary oncogenic drivers in cancers like NSCLC (EGFR), CML (ABL1), and Melanoma (BRAF).")
-
-    with st.expander("Q4: What is the main finding of your cold-start reproduction?"):
-        st.write("**Answer:** In standard random split (S1), our model achieves an R² of ~0.685 (consistent with published ~0.741). However, in a drug-disjoint cold-start split (where test drugs were never seen during training), R² collapses to near zero (-0.0079). This proves that the attention mechanism heavily relies on memorizing known drug structures rather than learning universal interaction physics.")
 
 st.markdown("---")
 st.caption("Developed for Statistical Learning (DSC4804) Evaluation · Group 17 · BML Munjal University")
