@@ -1,0 +1,1 @@
+{'epoch': 5, 'best_val_mse': 0.3538723672617177, 'best_val_r2': 0.5648336690917674, 'model_architecture': 'AttentionDTA (Two-Sided Multi-Head Attention)', 'dataset': 'Davis Kinase', 'saved_at': '2026-11-25 20:48:31'}
