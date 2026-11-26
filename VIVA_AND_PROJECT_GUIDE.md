@@ -45,9 +45,9 @@ Use this guide to master your project presentation and answer any viva question 
 
 ### Core Concept 5: What was Group 17's experimental investigation? (The Cold-Start Finding)
 * **Standard S1 Split Reproduction:**
-  * Our reproduced model achieved an $R^2 \approx 0.6853$ (average of folds), directionally consistent with the published paper's $R^2 = 0.7409$.
+  * Our reproduced model achieved an $R^2 \approx 0.6853$ (average of Fold 1 and Fold 2 out of 5 folds due to computational budget), directionally consistent with the published paper's 5-fold average of $R^2 = 0.7409$.
 * **Drug-Disjoint Cold-Start Split:**
-  * We split the dataset such that **14 drugs in the test set were never seen during training**.
+  * We split the dataset such that **14 drugs in the test set were never seen during training** (evaluated with a single random seed).
   * On the validation set (with known drugs), $R^2$ was **0.6953**.
   * But on the unseen test drugs, **$R^2$ collapsed to -0.0079** (essentially zero or predicting the dataset mean).
 * **Viva Punchline:**

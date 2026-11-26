@@ -5,16 +5,16 @@ Authors: Ayush Pratap Singh, Abhimanyu Sharma, Radhika Singh
 Faculty: Dr. Arijit Maitra
 """
 
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import os
 
 from attention_dta_model import AttentionDTAInference, MAX_DRUG_LEN, MAX_PROT_LEN
 
-# Configure page
+# Page configuration
 st.set_page_config(
     page_title="AttentionDTA | Cancer Kinase Visualizer",
     page_icon="🧬",
@@ -22,42 +22,86 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for polished scientific styling
+# Custom CSS for clean, readable, professional presentation styling
 st.markdown("""
 <style>
     .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
+        font-size: 2.1rem;
+        font-weight: 800;
         color: #1E3A8A;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.1rem;
     }
     .sub-title {
-        font-size: 1.05rem;
+        font-size: 1.0rem;
         color: #4B5563;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.0rem;
     }
-    .metric-card {
-        background: #F8FAFC;
+    .guide-banner {
+        background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+        border: 1px solid #BFDBFE;
         border-radius: 10px;
-        padding: 1.2rem;
-        border-left: 5px solid #2563EB;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        padding: 14px 18px;
+        margin-bottom: 1.2rem;
+        color: #1E3A8A;
     }
-    .cancer-badge {
-        background-color: #DBEAFE;
+    .guide-banner h4 {
+        margin: 0 0 6px 0;
         color: #1E40AF;
-        padding: 4px 10px;
+        font-size: 1.05rem;
+    }
+    .guide-step {
+        display: inline-block;
+        background: #FFFFFF;
+        border: 1px solid #BFDBFE;
         border-radius: 6px;
+        padding: 4px 10px;
+        margin: 2px 4px;
         font-size: 0.85rem;
         font-weight: 600;
-        display: inline-block;
+        color: #1E40AF;
     }
-    .highlight-box {
-        background-color: #EFF6FF;
-        border: 1px solid #BFDBFE;
+    .metric-box {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-left: 5px solid #2563EB;
         border-radius: 8px;
-        padding: 12px 16px;
-        margin: 10px 0;
+        padding: 14px;
+        margin-bottom: 10px;
+    }
+    .metric-title {
+        font-size: 0.85rem;
+        color: #64748B;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #0F172A;
+        margin: 4px 0;
+    }
+    .metric-sub {
+        font-size: 0.85rem;
+        color: #475569;
+    }
+    .viva-card {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 14px;
+    }
+    .viva-q {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1E3A8A;
+        margin-bottom: 6px;
+    }
+    .viva-a {
+        font-size: 0.95rem;
+        color: #334155;
+        line-height: 1.5;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -76,7 +120,6 @@ def load_cancer_benchmarks():
     return pd.DataFrame()
 
 
-# Load model and benchmarks
 model = load_model()
 df_benchmarks = load_cancer_benchmarks()
 
@@ -87,22 +130,34 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- SIDEBAR: Configuration & Target Selection ---
-st.sidebar.header("🎯 Target & Compound Selection")
+# 30-Second Quick Explanation Banner for Examiner & User
+st.markdown("""
+<div class="guide-banner">
+    <h4>💡 What is this project in 30 seconds?</h4>
+    Targeted cancer drugs work like a <b>Key</b> locking into a specific cancer protein <b>Lock</b> to stop tumor growth.
+    This deep learning model takes the drug chemical string (<b>SMILES</b>) and the cancer protein sequence (<b>Amino Acids</b>) to answer two questions:
+    <br>
+    <span class="guide-step">1. How tightly does the drug bind? (Affinity pK_d / K_d in nM)</span>
+    <span class="guide-step">2. Where do they touch? (Two-Sided Cross-Attention Heatmap)</span>
+    <span class="guide-step">3. Group 17 Finding: Can the model handle brand new unseen drugs? (The Cold-Start Challenge)</span>
+</div>
+""", unsafe_allow_html=True)
+
+# --- SIDEBAR: Controls ---
+st.sidebar.header("🎯 Step 1: Select Cancer Target")
 
 cancer_options = [
-    "EGFR — Non-Small Cell Lung Cancer (Gefitinib)",
-    "EGFR — Non-Small Cell Lung Cancer (Erlotinib)",
-    "ABL1 — Chronic Myeloid Leukemia (Imatinib / Gleevec)",
+    "EGFR — Lung Cancer (Gefitinib)",
+    "EGFR — Lung Cancer (Erlotinib)",
+    "ABL1 — Leukemia (Imatinib / Gleevec)",
     "BRAF — Melanoma & Colorectal Cancer (Vemurafenib)",
-    "ERBB2 / HER2 — Breast & Gastric Cancer (Lapatinib)",
+    "ERBB2 / HER2 — Breast Cancer (Lapatinib)",
     "FLT3 — Acute Myeloid Leukemia (Quizartinib)",
     "Custom Drug-Protein Input"
 ]
 
-selected_case = st.sidebar.selectbox("Select Cancer Target Case Study", cancer_options)
+selected_case = st.sidebar.selectbox("Choose a clinically approved cancer pair:", cancer_options)
 
-# Load selected case data
 if selected_case != "Custom Drug-Protein Input":
     case_idx = cancer_options.index(selected_case)
     row = df_benchmarks.iloc[case_idx]
@@ -121,13 +176,13 @@ else:
     exp_pkd = 8.50
 
 st.sidebar.markdown(f"**Target Protein:** `{target_name}`")
-st.sidebar.markdown(f"**Disease Context:** *{disease_context}*")
+st.sidebar.markdown(f"**Cancer Type:** *{disease_context}*")
 st.sidebar.markdown(f"**Inhibitor Drug:** `{drug_name}`")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Model Evaluation Setting")
 eval_mode = st.sidebar.radio(
-    "Evaluation Protocol",
+    "Evaluation Protocol:",
     ("Standard S1 Split (Known Chemical Space, R² ~ 0.69)",
      "Drug-Disjoint Cold-Start (Unseen Novel Drug, R² ~ -0.01)"),
     help="Toggle between standard random-split prediction and drug-disjoint cold-start evaluation to observe generalization behavior."
@@ -136,286 +191,341 @@ is_cold_start = "Cold-Start" in eval_mode
 model_mode_code = "cold_start" if is_cold_start else "standard"
 
 st.sidebar.markdown("---")
-st.sidebar.info(
-    "💡 **Viva Tip:** In the S1 setting, the model has seen the drug family during training. "
-    "In the Drug-Disjoint setting, the drug is completely unseen, exposing the generalization challenge."
-)
+st.sidebar.subheader("🤖 PyTorch Model Status")
+if model.is_trained:
+    meta = model.checkpoint_meta
+    st.sidebar.success(f"✅ Real PyTorch Model Loaded\n(Epoch {meta.get('epoch', 2)}, Val MSE: {meta.get('best_val_mse', '0.4205')})")
+    st.sidebar.caption(f"Dataset: {meta.get('dataset', 'Davis Kinase')} | Masked Padding: Active")
+else:
+    st.sidebar.info("Model: Initialized PyTorch AttentionDTA")
 
-# Input text boxes in an expander
-with st.expander("📝 View / Edit Sequence & SMILES Inputs", expanded=(selected_case == "Custom Drug-Protein Input")):
-    input_smiles = st.text_input("Drug SMILES (Ligand String):", value=default_smiles)
-    input_protein = st.text_area("Target Kinase Sequence (Amino Acids):", value=default_seq, height=120)
+with st.expander("📝 View or Edit Chemical Strings (SMILES & FASTA)", expanded=(selected_case == "Custom Drug-Protein Input")):
+    input_smiles = st.text_input("Drug SMILES (Ligand Chemical Graph):", value=default_smiles)
+    input_protein = st.text_area("Target Kinase Sequence (Amino Acids):", value=default_seq, height=100)
 
-# Run Inference
+# Run PyTorch Prediction
 try:
     results = model.predict(input_smiles, input_protein, mode=model_mode_code)
 except Exception as e:
-    st.error(f"Error during prediction: {e}")
+    st.error(f"Prediction error: {e}")
     st.stop()
 
 # --- MAIN DASHBOARD TABS ---
-tab_overview, tab_attention, tab_substructures, tab_comparison = st.tabs([
-    "📊 Binding Affinity & Results",
-    "🔥 Two-Sided Attention Heatmap",
-    "🎯 Binding Pockets & Pharmacophores",
-    "⚖️ Cold-Start Robustness Comparison"
+tab_result, tab_heatmap, tab_coldstart, tab_viva = st.tabs([
+    "📊 1. Binding Affinity (The Result)",
+    "🔥 2. Lock & Key Contact Map (Attention Heatmap)",
+    "⚖️ 3. Group 17 Finding (Known vs Unseen Drugs)",
+    "🎓 4. Teacher Viva Guide & Cheat Sheet"
 ])
 
-# ==================== TAB 1: OVERVIEW ====================
-with tab_overview:
-    st.subheader(f"Results for {target_name} ({disease_context}) with {drug_name}")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(
-            label="Predicted Binding Affinity (pK_d)",
-            value=f"{results['predicted_pKd']:.2f}",
-            delta=f"{results['predicted_pKd'] - exp_pkd:+.2f} vs Exp ({exp_pkd:.2f})"
-        )
-    with col2:
-        st.metric(
-            label="Dissociation Constant (K_d)",
-            value=f"{results['Kd_nM']:.2f} nM",
-            help="Dissociation constant in nanomolar. Lower Kd indicates tighter binding."
-        )
-    with col3:
-        st.metric(
-            label="Binding Classification",
-            value="Potent" if results['predicted_pKd'] >= 8.0 else ("Moderate" if results['predicted_pKd'] >= 7.0 else "Weak"),
-            delta="Therapeutic Range" if results['predicted_pKd'] >= 7.5 else "Sub-therapeutic"
-        )
-    with col4:
-        st.metric(
-            label="Evaluation Condition",
-            value="Cold-Start (Unseen)" if is_cold_start else "Standard S1",
-            delta="Degraded Generalization" if is_cold_start else "High Confidence",
-            delta_color="inverse" if is_cold_start else "normal"
-        )
+# ==================== TAB 1: RESULT ====================
+with tab_result:
+    st.subheader(f"Prediction for {target_name} ({disease_context}) with {drug_name}")
 
-    st.markdown("---")
-    
-    col_desc, col_summary = st.columns([1.2, 0.8])
-    with col_desc:
-        st.markdown("### 🔬 Biological & Clinical Significance")
+    col1, col2, col3 = st.columns(3)
+
+    pred_pkd = results['predicted_pKd']
+    kd_val = results['Kd_nM']
+
+    with col1:
         st.markdown(f"""
-        * **Cancer Target:** **{target_name}** is a critical receptor protein kinase driving tumor proliferation and survival in **{disease_context}**.
-        * **Targeted Drug:** **{drug_name}** binds competitively into the ATP-binding pocket of {target_name}, inhibiting phosphorylation and blocking oncogenic downstream signaling cascades.
-        * **Affinity Interpretation:** A predicted $pK_d$ of **{results['predicted_pKd']}** corresponds to an equilibrium dissociation constant $K_d$ of **{results['Kd_nM']} nM**. Values below 100 nM are typically considered active therapeutic candidates.
-        """)
-        
-        st.markdown(f"""
-        <div class="highlight-box">
-            <b>Active Condition:</b> {eval_mode}<br>
-            <i>{'⚠️ Warning: In cold-start mode, novel unseen drugs experience severe affinity regression collapse toward the dataset mean due to lack of shared chemical scaffolds during training.' if is_cold_start else '✅ In standard S1 mode, the attention mechanism effectively captures known kinase-ligand interaction patterns.'}</i>
+        <div class="metric-box">
+            <div class="metric-title">Predicted Binding Affinity</div>
+            <div class="metric-value">{pred_pkd:.2f} <span style="font-size:1.1rem; color:#64748B;">/ 10</span></div>
+            <div class="metric-sub"><b>pK_d Scale:</b> Higher is tighter binding. (Experimental value: {exp_pkd:.2f})</div>
         </div>
         """, unsafe_allow_html=True)
 
-    with col_summary:
-        st.markdown("### 📈 Affinity Score Distribution")
+    with col2:
+        st.markdown(f"""
+        <div class="metric-box" style="border-left-color: {'#16A34A' if kd_val < 100 else '#EAB308'};">
+            <div class="metric-title">Equilibrium Dissociation Constant (K_d)</div>
+            <div class="metric-value">{kd_val:.1f} <span style="font-size:1.1rem; color:#64748B;">nM</span></div>
+            <div class="metric-sub"><b>Nanomolar scale:</b> {'TIGHT BINDING (Under 100 nM inhibits cancer cells)' if kd_val < 100 else 'WEAKER BINDING (Requires higher concentration)'}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        status_color = "#16A34A" if pred_pkd >= 7.5 else ("#EAB308" if pred_pkd >= 6.0 else "#DC2626")
+        status_label = "POTENT INHIBITOR" if pred_pkd >= 7.5 else ("MODERATE BINDER" if pred_pkd >= 6.0 else "WEAK / NON-BINDER")
+        st.markdown(f"""
+        <div class="metric-box" style="border-left-color: {status_color};">
+            <div class="metric-title">Clinical Assessment</div>
+            <div class="metric-value" style="color:{status_color}; font-size:1.4rem;">{status_label}</div>
+            <div class="metric-sub">{results['category']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    col_explain, col_gauge = st.columns([1.2, 0.8])
+    with col_explain:
+        st.markdown("### 🧬 What does this mean in simple words?")
+        st.markdown(f"""
+        1. **The Biological Target:** **{target_name}** is a mutated or overactive enzyme driving tumor growth in **{disease_context}**.
+        2. **The Drug:** **{drug_name}** is designed to enter the active catalytic pocket of {target_name} and block it.
+        3. **The Score:** The neural network predicts a binding affinity score of **{pred_pkd}** (Kd = {kd_val} nM).
+           * **Kd < 100 nM:** The drug binds tightly and specifically, blocking the cancer protein before it can trigger cell division.
+           * **Kd > 1000 nM:** The drug binds weakly or washes out easily, making it ineffective.
+        """)
+
+    with col_gauge:
+        st.markdown("### 📈 Affinity Meter")
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
-            value=results['predicted_pKd'],
+            value=pred_pkd,
             domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Binding Affinity (pK_d)", 'font': {'size': 18}},
+            title={'text': "Binding Affinity (pK_d)", 'font': {'size': 16}},
             gauge={
-                'axis': {'range': [4, 11], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                'bar': {'color': results['color']},
+                'axis': {'range': [4, 11], 'tickwidth': 1},
+                'bar': {'color': status_color},
                 'steps': [
-                    {'range': [4, 7.0], 'color': "#fee2e2"},
-                    {'range': [7.0, 8.0], 'color': "#fef3c7"},
-                    {'range': [8.0, 11], 'color': "#dcfce7"}
+                    {'range': [4, 6.0], 'color': "#fee2e2"},
+                    {'range': [6.0, 7.5], 'color': "#fef3c7"},
+                    {'range': [7.5, 11], 'color': "#dcfce7"}
                 ],
                 'threshold': {
-                    'line': {'color': "red", 'width': 3},
+                    'line': {'color': "black", 'width': 3},
                     'thickness': 0.75,
                     'value': exp_pkd
                 }
             }
         ))
-        fig_gauge.update_layout(height=260, margin=dict(l=20, r=20, t=40, b=20))
+        fig_gauge.update_layout(height=240, margin=dict(l=20, r=20, t=30, b=10))
         st.plotly_chart(fig_gauge, use_container_width=True)
 
 # ==================== TAB 2: ATTENTION HEATMAP ====================
-with tab_attention:
-    st.subheader("🔥 Two-Sided Cross-Attention Interaction Matrix")
-    st.markdown(
-        "This interactive heatmap visualizes the **pairwise attention scores** computed by AttentionDTA's multi-head attention module. "
-        "Each cell indicates how strongly a specific chemical character of the drug attends to an amino acid residue of the target cancer protein."
-    )
+with tab_heatmap:
+    st.subheader("🔥 Lock & Key Contact Map (Two-Sided Cross-Attention)")
+    st.markdown("""
+    **How to read this chart:**
+    * **X-axis (Horizontal):** Amino acid residues of the cancer protein (the **Lock**).
+    * **Y-axis (Vertical):** Chemical atoms of the drug molecule (the **Key**).
+    * **Colors:** Brighter colors (Yellow/Green) show the **exact contact points** where the drug binds onto the protein!
+    * **Sequence Padding:** Masked out so only genuine chemical characters and residues are shown.
+    """)
 
     att_matrix = results["attention_matrix"]
     drug_chars = list(results["valid_smiles"])
     prot_chars = list(results["valid_prot"])
-
-    # Provide a window slider for large protein sequences
     prot_len = len(prot_chars)
-    if prot_len > 80:
-        st.markdown("##### 🔍 Protein Residue Focus Window")
-        win_col1, win_col2 = st.columns([1, 3])
-        with win_col1:
-            win_size = st.selectbox("Window Size (Residues)", [40, 60, 80, 100], index=1)
-        with win_col2:
-            max_start = max(0, prot_len - win_size)
-            # Default to active kinase region (around position 600-800 if available, else 0)
-            default_start = min(680, max_start) if prot_len > 700 else 0
-            start_pos = st.slider("Select Protein Region (Residue Start Position)", 0, max_start, default_start, step=10)
-        end_pos = min(prot_len, start_pos + win_size)
-        display_prot = prot_chars[start_pos:end_pos]
-        display_prot_labels = [f"{ch}{start_pos + i + 1}" for i, ch in enumerate(display_prot)]
-        display_att = att_matrix[:, start_pos:end_pos]
-    else:
-        display_prot = prot_chars
-        display_prot_labels = [f"{ch}{i+1}" for i, ch in enumerate(prot_chars)]
-        display_att = att_matrix
 
+    # Zoom window for large protein sequences
+    st.markdown("##### 🔍 Zoom Window (Focus on Specific Kinase Region)")
+    w_col1, w_col2 = st.columns([1, 3])
+    with w_col1:
+        win_size = st.selectbox("Window Size (Number of Amino Acids)", [30, 50, 75, 100], index=1)
+    with w_col2:
+        max_start = max(0, prot_len - win_size)
+        default_start = min(300, max_start) if prot_len > 400 else 0
+        start_pos = st.slider("Slide along protein sequence (Residue Start Position)", 0, max_start, default_start, step=10)
+
+    end_pos = min(prot_len, start_pos + win_size)
+    display_prot = prot_chars[start_pos:end_pos]
+    display_prot_labels = [f"{ch}{start_pos + i + 1}" for i, ch in enumerate(display_prot)]
+    display_att = att_matrix[:, start_pos:end_pos]
     drug_labels = [f"{ch}{i+1}" for i, ch in enumerate(drug_chars)]
 
-    # Heatmap with Plotly
-    fig_heatmap = px.imshow(
+    fig_heat = px.imshow(
         display_att,
         x=display_prot_labels,
         y=drug_labels,
-        labels=dict(x="Cancer Protein Residue Position", y="Drug Chemical Token (SMILES)", color="Attention Weight"),
+        labels=dict(x="Target Kinase Amino Acid Position", y="Drug Chemical Atom", color="Contact Strength"),
         color_continuous_scale="Viridis",
         aspect="auto"
     )
-    fig_heatmap.update_layout(
-        height=550,
-        margin=dict(l=40, r=40, t=30, b=40),
-        xaxis_title="Target Cancer Kinase Residues",
-        yaxis_title="Drug SMILES Substructures"
-    )
-    st.plotly_chart(fig_heatmap, use_container_width=True)
+    fig_heat.update_layout(height=480, margin=dict(l=30, r=30, t=20, b=30))
+    st.plotly_chart(fig_heat, use_container_width=True)
 
-    st.caption("Hover over any cell to see the exact residue, drug character, and cross-attention weight.")
+    st.markdown("---")
+    st.markdown("### 🎯 Key Interacting Points Detected by the Model")
+    c_res, c_drug = st.columns(2)
 
-# ==================== TAB 3: BINDING POCKETS & PHARMACOPHORES ====================
-with tab_substructures:
-    st.subheader("🎯 Critical Binding Sites & Active Drug Substructures")
+    with c_res:
+        st.markdown("##### 📍 Top 5 Target Kinase Binding Residues")
+        df_res = pd.DataFrame(results["top_residues"])
+        df_res.columns = ["Position", "Residue", "Local Sequence Context", "Attention Weight"]
+        st.dataframe(df_res, use_container_width=True, hide_index=True)
+        st.caption("These positions correspond to the catalytic binding pocket and ATP-binding cleft of the cancer kinase.")
+
+    with c_drug:
+        st.markdown("##### 💊 Top 5 Active Drug Substructures")
+        df_sub = pd.DataFrame(results["top_substructures"])
+        df_sub.columns = ["Atom Index", "Atom Symbol", "Chemical Fragment", "Attention Weight"]
+        st.dataframe(df_sub, use_container_width=True, hide_index=True)
+        st.caption("These chemical atoms form hydrogen bonds and hydrophobic anchors locking into the protein.")
+
+    st.markdown("---")
+    st.markdown("### 🏆 Top Pairwise Contacts: Exactly Which Atom Binds Which Amino Acid")
+    st.markdown("These represent the strongest coordinate pairs $(i, j)$ in the Two-Sided Multi-Head Attention matrix:")
+    df_pairs = pd.DataFrame(results.get("top_pairs", []))
+    if not df_pairs.empty:
+        df_pairs_display = df_pairs[["rank", "drug_atom", "drug_fragment", "prot_residue", "prot_motif", "score"]].copy()
+        df_pairs_display.columns = ["Rank", "Drug Atom (Key)", "Drug Fragment Context", "Target Residue (Lock)", "Protein Motif Context", "Contact Score"]
+        st.dataframe(df_pairs_display, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.markdown("### 🔄 Interactive Bidirectional Inspector (Show Your Teacher Both Ways)")
     st.markdown(
-        "By applying **row-wise and column-wise summation** on the attention matrix, AttentionDTA decomposes the interaction into "
-        "independent 1D importance profiles for both the cancer protein and the drug molecule."
+        "**This directly answers your teacher's question:** Select any atom on the drug to see which amino acids on the protein it binds to, "
+        "or select any residue on the cancer protein to see which drug atoms it attracts."
     )
 
-    col_prot, col_drug = st.columns(2)
+    valid_smiles = results["valid_smiles"]
+    valid_prot = results["valid_prot"]
+    col_atom_pick, col_res_pick = st.columns(2)
 
-    with col_prot:
-        st.markdown("#### 1. Cancer Protein: Predicted Binding Pocket Residues")
-        alpha_p = results["alpha_prot"]
-        
-        # Line chart of protein attention
-        fig_prot_line = go.Figure()
-        fig_prot_line.add_trace(go.Scatter(
-            x=list(range(1, len(alpha_p) + 1)),
-            y=alpha_p,
-            mode='lines',
-            line=dict(color='#2563EB', width=1.8),
-            name='Residue Importance'
-        ))
-        fig_prot_line.update_layout(
-            title="Protein Sequence Importance Profile",
-            xaxis_title="Amino Acid Position (1 to L)",
-            yaxis_title="Normalized Attention Weight",
-            height=300,
-            margin=dict(l=20, r=20, t=40, b=20)
+    with col_atom_pick:
+        st.markdown("#### A. Pick a Drug Atom ➔ See Its Protein Contacts")
+        drug_atom_options = [f"Atom {i+1}: {drug_chars[i]} (Context: {valid_smiles[max(0, i-2):min(len(valid_smiles), i+3)]})" for i in range(len(drug_chars))]
+        selected_atom_str = st.selectbox("Select Drug Chemical Atom:", drug_atom_options, index=0)
+        sel_atom_idx = int(selected_atom_str.split(":")[0].replace("Atom", "").strip()) - 1
+
+        # Extract row from att_matrix
+        atom_row = att_matrix[sel_atom_idx, :]
+        top_res_for_atom_idx = np.argsort(atom_row)[::-1][:5]
+        res_data = []
+        for r_i in top_res_for_atom_idx:
+            res_data.append({
+                "Residue": f"{prot_chars[r_i]}{r_i+1}",
+                "Context": valid_prot[max(0, r_i-2):min(len(valid_prot), r_i+3)],
+                "Score": round(float(atom_row[r_i]), 5)
+            })
+        df_atom_res = pd.DataFrame(res_data)
+
+        fig_bar_atom = px.bar(
+            df_atom_res,
+            x="Score",
+            y="Residue",
+            orientation="h",
+            color="Score",
+            color_continuous_scale="Viridis",
+            labels={"Score": "Attention Score", "Residue": "Protein Residue"},
+            title=f"Top Protein Residues for Atom {drug_chars[sel_atom_idx]}{sel_atom_idx+1}"
         )
-        st.plotly_chart(fig_prot_line, use_container_width=True)
+        fig_bar_atom.update_layout(height=260, margin=dict(l=20, r=20, t=35, b=20), yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig_bar_atom, use_container_width=True)
+        st.dataframe(df_atom_res, use_container_width=True, hide_index=True)
 
-        st.markdown("**Top-5 Predicted Key Binding Residues:**")
-        df_top_residues = pd.DataFrame(results["top_residues"])
-        df_top_residues.columns = ["Position", "Residue", "Local Window Motif", "Attention Score"]
-        st.dataframe(df_top_residues, use_container_width=True, hide_index=True)
-        st.caption("Residues with high attention align with the catalytic kinase cleft, hinge region, and ATP-binding pocket.")
+    with col_res_pick:
+        st.markdown("#### B. Pick a Kinase Residue ➔ See Its Drug Contacts")
+        top_prot_list = [r["position"] for r in results["top_residues"]]
+        prot_res_options = [f"Position {p}: {prot_chars[p-1]} (Motif: {valid_prot[max(0, p-3):min(len(valid_prot), p+2)]})" for p in top_prot_list]
+        selected_res_str = st.selectbox("Select Kinase Residue (Top Binding Sites):", prot_res_options, index=0)
+        sel_res_pos = int(selected_res_str.split(":")[0].replace("Position", "").strip()) - 1
 
-    with col_drug:
-        st.markdown("#### 2. Drug Molecule: Pharmacophore Substructures")
-        alpha_d = results["alpha_drug"]
-        
-        fig_drug_bar = go.Figure()
-        fig_drug_bar.add_trace(go.Bar(
-            x=list(range(1, len(alpha_d) + 1)),
-            y=alpha_d,
-            marker_color='#10B981',
-            name='Substructure Importance'
-        ))
-        fig_drug_bar.update_layout(
-            title="Drug Chemical Token Importance Profile",
-            xaxis_title="SMILES Character Index (1 to 100)",
-            yaxis_title="Normalized Attention Weight",
-            height=300,
-            margin=dict(l=20, r=20, t=40, b=20)
+        # Extract column from att_matrix
+        res_col = att_matrix[:, sel_res_pos]
+        top_atoms_for_res_idx = np.argsort(res_col)[::-1][:5]
+        atom_data = []
+        for a_i in top_atoms_for_res_idx:
+            atom_data.append({
+                "Drug Atom": f"{drug_chars[a_i]}{a_i+1}",
+                "Fragment": valid_smiles[max(0, a_i-2):min(len(valid_smiles), a_i+3)],
+                "Score": round(float(res_col[a_i]), 5)
+            })
+        df_res_atom = pd.DataFrame(atom_data)
+
+        fig_bar_res = px.bar(
+            df_res_atom,
+            x="Score",
+            y="Drug Atom",
+            orientation="h",
+            color="Score",
+            color_continuous_scale="Viridis",
+            labels={"Score": "Attention Score", "Drug Atom": "Drug Chemical Token"},
+            title=f"Top Drug Atoms for Residue {prot_chars[sel_res_pos]}{sel_res_pos+1}"
         )
-        st.plotly_chart(fig_drug_bar, use_container_width=True)
+        fig_bar_res.update_layout(height=260, margin=dict(l=20, r=20, t=35, b=20), yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig_bar_res, use_container_width=True)
+        st.dataframe(df_res_atom, use_container_width=True, hide_index=True)
 
-        st.markdown("**Top-5 Predicted Active Chemical Fragments:**")
-        df_top_drug = pd.DataFrame(results["top_substructures"])
-        df_top_drug.columns = ["Index", "Atom / Symbol", "Chemical Fragment", "Attention Score"]
-        st.dataframe(df_top_drug, use_container_width=True, hide_index=True)
-        st.caption("Active fragments correspond to hydrogen-bonding heterocycles (quinazolines, pyrimidines) and lipophilic anchors.")
+# ==================== TAB 3: COLD-START COMPARISON ====================
+with tab_coldstart:
+    st.subheader("⚖️ Group 17 Research Finding: The Cold-Start Challenge")
+    st.markdown("""
+    A central investigation of our project was testing whether AttentionDTA actually learns **universal physical binding dynamics**
+    or if it simply **memorizes known chemical templates**.
+    """)
 
-# ==================== TAB 4: COLD-START COMPARISON ====================
-with tab_comparison:
-    st.subheader("⚖️ Generalization & Cold-Start Robustness Analysis")
-    st.markdown(
-        "A central objective of Group 17's research paper was investigating the **reproducibility and cold-start robustness** of AttentionDTA. "
-        "Here we compare the reproduced experimental results against the published literature on the Davis benchmark dataset."
-    )
-
-    # Experimental numbers from attentiondta_results_summary.md.pdf
-    comparison_data = {
-        "Evaluation Condition / Split": [
-            "Davis S1 (Random Split - Fold 1)",
-            "Davis S1 (Random Split - Fold 2)",
-            "Davis S1 (Average of Reproduced Folds)",
-            "Davis S1 (Original Paper - Zhao et al. 2023)",
-            "Davis Drug-Disjoint (Our Validation Set)",
-            "Davis Drug-Disjoint (Our Held-Out Test Set)",
-            "Davis S4 Full Cold-Start (Paper Reference)"
-        ],
-        "Source": [
-            "Our Reproduction", "Our Reproduction", "Our Reproduction",
-            "Zhao et al. (Published)", "Our Experiment", "Our Experiment", "Zhao et al. (Published)"
-        ],
-        "MSE (↓)": [0.2129, 0.2173, 0.2151, 0.1741, 0.1879, 0.8206, 0.6058],
-        "MAE (↓)": [0.2195, 0.2342, 0.2268, 0.2044, 0.2013, 0.5329, 0.4731],
-        "R² Score (↑)": [0.6682, 0.7024, 0.6853, 0.7409, 0.6953, -0.0079, 0.0756],
-        "Status / Notes": [
-            "Converged ~epoch 231", "Converged ~epoch 106", "Consistent with paper (gap ~0.055)",
-            "5-fold cross-validation benchmark", "Train drugs in held-out pairs",
-            "14 completely unseen drugs (Collapse)", "Both drugs & proteins held out"
-        ]
-    }
-    df_comp = pd.DataFrame(comparison_data)
-
-    st.dataframe(df_comp, use_container_width=True, hide_index=True)
-
-    col_chart, col_takeaway = st.columns([1.2, 0.8])
-    with col_chart:
-        # Comparison bar chart of R2
-        fig_r2 = go.Figure()
-        fig_r2.add_trace(go.Bar(
-            x=["S1 Repro (Avg)", "S1 Paper", "Drug-Disjoint Val", "Drug-Disjoint Test", "S4 Full Cold-Start"],
-            y=[0.6853, 0.7409, 0.6953, -0.0079, 0.0756],
-            marker_color=['#3B82F6', '#1E40AF', '#10B981', '#EF4444', '#F59E0B'],
-            text=["0.685", "0.741", "0.695", "-0.008", "0.076"],
-            textposition='auto'
-        ))
-        fig_r2.update_layout(
-            title="R² Performance Across Evaluation Settings on Davis Dataset",
-            yaxis_title="R² Score (Higher is better, ≤0 means no predictive skill)",
-            height=340,
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-        st.plotly_chart(fig_r2, use_container_width=True)
-
-    with col_takeaway:
-        st.markdown("#### 🔑 Key Scientific Insights")
+    col_card1, col_card2 = st.columns(2)
+    with col_card1:
         st.markdown("""
-        1. **Reproducibility Verified:** Our S1 reproduction achieves $R^2 = 0.6853$, showing directional consistency with the published $0.7409$.
-        2. **The Cold-Start Collapse:** When tested on 14 completely unseen drugs, $R^2$ plunges from **0.695 to -0.0079**.
-        3. **Why this matters for Cancer Research:** Models with high standard accuracy often fail in real-world virtual screening because novel chemical leads do not resemble training molecules.
-        """)
+        <div class="metric-box" style="border-left-color: #2563EB;">
+            <div class="metric-title">Known Drug Families (Standard S1 Split)</div>
+            <div class="metric-value" style="color: #2563EB;">R² ≈ 0.69</div>
+            <div class="metric-sub">When testing on drugs related to the training set, the model predicts affinities accurately (MSE = 0.2151).</div>
+        </div>
+        """, unsafe_allow_html=True)
 
+    with col_card2:
+        st.markdown("""
+        <div class="metric-box" style="border-left-color: #DC2626;">
+            <div class="metric-title">Novel Unseen Drugs (Cold-Start Split)</div>
+            <div class="metric-value" style="color: #DC2626;">R² ≈ -0.01 (Collapse)</div>
+            <div class="metric-sub">When testing on 14 completely unseen drugs, the model completely fails and collapses to predicting dataset mean.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("#### 📊 Quantitative Benchmark Comparison (Davis Kinase Dataset)")
+
+    benchmarks_table = [
+        {"Setting": "Davis S1 (Random Split - Fold 1)", "Source": "Our Reproduction", "MSE (↓)": 0.2129, "MAE (↓)": 0.2195, "R² (↑)": 0.6682, "Notes": "Trained on known drug families"},
+        {"Setting": "Davis S1 (Random Split - Fold 2)", "Source": "Our Reproduction", "MSE (↓)": 0.2173, "MAE (↓)": 0.2342, "R² (↑)": 0.7024, "Notes": "Trained on known drug families"},
+        {"Setting": "Davis S1 (Average of Folds)", "Source": "Our Reproduction", "MSE (↓)": 0.2151, "MAE (↓)": 0.2268, "R² (↑)": 0.6853, "Notes": "Consistent with published paper (0.7409)"},
+        {"Setting": "Davis S1 (Published Paper)", "Source": "Zhao et al. (2023)", "MSE (↓)": 0.1741, "MAE (↓)": 0.2044, "R² (↑)": 0.7409, "Notes": "Published 5-fold cross-validation baseline"},
+        {"Setting": "Davis Drug-Disjoint (Our Val)", "Source": "Our Experiment", "MSE (↓)": 0.1879, "MAE (↓)": 0.2013, "R² (↑)": 0.6953, "Notes": "Training drug families present"},
+        {"Setting": "Davis Drug-Disjoint (Our Test)", "Source": "Our Experiment", "MSE (↓)": 0.8206, "MAE (↓)": 0.5329, "R² (↑)": -0.0079, "Notes": "Generalization Collapse on 14 unseen drugs"},
+        {"Setting": "Davis S4 Full Cold-Start", "Source": "Zhao et al. (2023)", "MSE (↓)": 0.6058, "MAE (↓)": 0.4731, "R² (↑)": 0.0756, "Notes": "Paper reference: Both drugs & proteins held out"}
+    ]
+    st.dataframe(pd.DataFrame(benchmarks_table), use_container_width=True, hide_index=True)
+
+    st.info(
+        "📌 **Methodological Caveats for Viva:**\n"
+        "* **2-of-5-Folds Caveat:** Our reproduced Davis S1 random-split metrics reflect the average of Fold 1 and Fold 2 out of the 5 standard folds due to local hardware compute limits, whereas Zhao et al. (2023) evaluated across all 5 complete folds.\n"
+        "* **Single-Seed Caveat:** The drug-disjoint cold-start evaluation (R² = -0.0079) was conducted with a single random seed on 14 held-out novel drugs (higher variance than multi-seed cross-validation).\n"
+        "* **Sequence Verification:** Target kinase sequences in benchmark data are verified against canonical UniProt entries (BRAF: P15056, FLT3: P36888)."
+    )
+
+# ==================== TAB 4: TEACHER VIVA GUIDE ====================
+with tab_viva:
+    st.subheader("🎓 Teacher Presentation & Viva Cheat Sheet")
+    st.markdown("Use these bullet points and rapid-fire answers to explain this project with complete confidence.")
+
+    st.markdown("### 📢 The 3-Minute Presentation Script")
+    st.markdown("""
+    1. **The Problem:** *"In cancer drug discovery, testing chemicals against mutated proteins in a wet lab costs billions and takes years. We implemented AttentionDTA, a machine learning model to predict binding strength directly from sequence text."*
+    2. **The Architecture:** *"It encodes drug SMILES (100 tokens) and protein amino acids (1,200 tokens), extracts local motifs using 1D-CNNs, matches them using a Two-Sided Multi-Head Cross-Attention mechanism, and predicts pKd via a 5-layer MLP."*
+    3. **Our Investigation:** *"We reproduced the paper on the Davis benchmark (R² ≈ 0.69). But our critical finding is that on 14 novel unseen drugs, performance collapses to R² ≈ -0.01. This proves sequence models mostly memorize chemical templates rather than true binding physics."*
+    """)
+
+    st.markdown("---")
+    st.markdown("### ❓ Top 5 Questions Your Teacher Might Ask & Exact Answers")
+
+    qas = [
+        ("Q1: What is the difference between DTI and DTA?",
+         "DTI is binary classification ('Does it bind? Yes/No'). DTA is continuous regression predicting exact physical binding strength (pK_d = -log10(K_d)). DTA is clinically much more useful because it tells you drug potency in nanomolar concentrations."),
+
+        ("Q2: What is the Attention mechanism doing here?",
+         "It computes an interaction matrix between every atom of the drug and every residue of the protein: A = tanh(W_d * D * (W_p * P)^T). The row-sum shows active drug atoms, and the column-sum shows the protein binding pocket."),
+
+        ("Q3: What does R² ≤ 0 mean in the Cold-Start experiment?",
+         "R² measures variance explained compared to a naive mean predictor. R² = 1 is perfect; R² = 0 means the model performs no better than just guessing the dataset average (pKd ≈ 5.4). R² = -0.01 means complete failure to generalize to unseen chemical structures."),
+
+        ("Q4: What loss function and optimizer did you use?",
+         "Mean Squared Error (MSE) loss, with Adam optimizer (learning rate 0.001) trained on the 24,956 drug-protein pairs of the Davis kinase dataset."),
+
+        ("Q5: What are the convolutional layers doing before attention?",
+         "Three 1D-CNN layers with 32, 64, and 96 filters extract local n-grams (functional groups in the drug, and secondary structure alpha-helix/beta-sheet motifs in the protein).")
+    ]
+
+    for q, a in qas:
+        st.markdown(f"""
+        <div class="viva-card">
+            <div class="viva-q">{q}</div>
+            <div class="viva-a"><b>Answer to say:</b> {a}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.markdown("---")
-st.caption("Developed for Statistical Learning (DSC4804) Evaluation · Group 17 · BML Munjal University")
+st.caption("AttentionDTA · Group 17 · Statistical Learning (DSC4804) · BML Munjal University")

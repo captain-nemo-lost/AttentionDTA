@@ -68,7 +68,7 @@ async function checkHealth() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/health`);
     if (res.ok) {
-      statusEl.innerText = "Backend Connected (Port 5000)";
+      statusEl.innerText = `Backend Connected (Port ${window.location.port || '5050'})`;
       statusEl.className = "status-indicator online";
     } else {
       statusEl.innerText = "Backend Error";
@@ -358,4 +358,23 @@ function renderActiveSites(data) {
     `;
     drugTbody.appendChild(tr);
   });
+
+  // Update Top Pairwise Lock & Key Table
+  const pairsTable = document.getElementById("topPairsTable");
+  if (pairsTable && data.top_pairs) {
+    const pairsTbody = pairsTable.querySelector("tbody");
+    pairsTbody.innerHTML = "";
+    data.top_pairs.forEach(p => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><b>#${p.rank}</b></td>
+        <td><span class="badge badge-success">${p.drug_atom}</span></td>
+        <td><code>${p.drug_fragment}</code></td>
+        <td><span class="badge badge-primary">${p.prot_residue}</span></td>
+        <td><code>...${p.prot_motif}...</code></td>
+        <td><b>${p.score.toFixed(5)}</b></td>
+      `;
+      pairsTbody.appendChild(tr);
+    });
+  }
 }

@@ -195,6 +195,7 @@ def predict():
         "protein_length": prot_len,
         "top_residues": raw_res["top_residues"],
         "top_substructures": raw_res["top_substructures"],
+        "top_pairs": raw_res.get("top_pairs", []),
         "heatmap": {
             "z": display_att,
             "x": display_prot_labels,
@@ -211,6 +212,6 @@ def predict():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5050))
     print(f"Starting AttentionDTA REST API on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)

@@ -70,6 +70,14 @@ def main():
     model = AttentionDTAInference()
     res = model.predict(smiles, protein_seq, mode=args.condition)
 
+    if res.get("is_trained"):
+        meta = res.get("checkpoint_meta", {})
+        mse_val = meta.get("best_val_mse")
+        mse_str = f"{mse_val:.4f}" if isinstance(mse_val, (int, float)) else str(mse_val)
+        print(f"Model Checkpoint:      PyTorch AttentionDTA (Epoch {meta.get('epoch')}, Val MSE: {mse_str})")
+    else:
+        print("Model Checkpoint:      Initialized PyTorch AttentionDTA")
+
     print("\n[PREDICTION RESULTS]")
     print(f"  * Predicted Affinity (pK_d):  {res['predicted_pKd']:.2f}")
     print(f"  * Equilibrium Const (K_d):    {res['Kd_nM']:.2f} nM")

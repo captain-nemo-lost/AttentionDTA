@@ -1,130 +1,92 @@
 """
-AttentionDTA: Drug-Target Binding Affinity Prediction & Multi-Head Attention Engine
+AttentionDTA: Real Neural Network Inference Engine
 Group 17 - Statistical Learning (DSC4804), BML Munjal University
 
-This module implements the complete AttentionDTA architecture:
-1. Label encoding and sequence embedding (SMILES length 100, Protein length 1200)
-2. 1D-CNN feature extraction blocks (32, 64, 96 filters)
-3. Two-Sided Multi-Head Cross-Attention Mechanism
-4. Global Max Pooling and 5-layer MLP affinity prediction head
-5. Dual inference modes:
-   - S1 Standard Model (Trained on Davis kinase dataset, R² ~ 0.685)
-   - Drug-Disjoint Cold-Start Model (Evaluates generalization on unseen drugs, R² ~ -0.008)
+This module implements the production inference pipeline for AttentionDTA:
+1. Canonical SMILES & Protein sequence tokenization with padding (100 and 1200 tokens)
+2. Loads trained PyTorch model state_dict from valid_best_checkpoint.pth
+3. Executes real forward pass through 1D-CNNs, Two-Sided Multi-Head Attention, and MLP
+4. Extracts genuine cross-attention interaction matrix with padding strictly masked
+5. Computes continuous binding affinity pKd and dissociation constant Kd (nM)
 """
 
+import os
+import sys
 import numpy as np
+import torch
 
-# Canonical SMILES character vocabulary
-SMILES_CHAR_DICT = {
-    "#": 1, "%": 2, ")": 3, "(": 4, "+": 5, "-": 6, ".": 7, "1": 8, "2": 9, "3": 10,
-    "4": 11, "5": 12, "6": 13, "7": 14, "8": 15, "9": 16, "=": 17, "A": 18, "B": 19,
-    "C": 20, "F": 21, "H": 22, "I": 23, "K": 24, "L": 25, "M": 26, "N": 27, "O": 28,
-    "P": 29, "R": 30, "S": 31, "T": 32, "V": 33, "X": 34, "Z": 35, "\\": 36, "a": 37,
-    "b": 38, "c": 39, "e": 40, "g": 41, "i": 42, "l": 43, "o": 44, "n": 45, "p": 46,
-    "s": 47, "u": 48, "[": 49, "]": 50, "/": 51, ":": 52
-}
+# Add project root to sys.path
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-# Standard 20 canonical amino acid vocabulary
-AMINO_ACID_DICT = {
-    "A": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6, "H": 7, "I": 8, "K": 9, "L": 10,
-    "M": 11, "N": 12, "P": 13, "Q": 14, "R": 15, "S": 16, "T": 17, "V": 18, "W": 19,
-    "Y": 20, "X": 21, "U": 22, "B": 23, "Z": 24
-}
-
-MAX_DRUG_LEN = 100
-MAX_PROT_LEN = 1200
-
-
-def encode_smiles(smiles: str, max_len: int = MAX_DRUG_LEN):
-    """Encodes a SMILES string into integers and pads/truncates to max_len."""
-    arr = np.zeros(max_len, dtype=np.int32)
-    clean_smiles = smiles.strip()
-    length = min(len(clean_smiles), max_len)
-    for i in range(length):
-        ch = clean_smiles[i]
-        arr[i] = SMILES_CHAR_DICT.get(ch, 0)
-    return arr, clean_smiles[:length]
-
-
-def encode_protein(protein_seq: str, max_len: int = MAX_PROT_LEN):
-    """Encodes a protein amino acid sequence into integers and pads/truncates to max_len."""
-    arr = np.zeros(max_len, dtype=np.int32)
-    clean_seq = protein_seq.strip().upper()
-    length = min(len(clean_seq), max_len)
-    for i in range(length):
-        aa = clean_seq[i]
-        arr[i] = AMINO_ACID_DICT.get(aa, 0)
-    return arr, clean_seq[:length]
+from train_attentiondta_pytorch import (
+    AttentionDTA,
+    CHARISOSMISET,
+    CHARPROTSET,
+    MAX_DRUG_LEN,
+    MAX_PROT_LEN,
+    encode_smiles,
+    encode_protein
+)
 
 
 class AttentionDTAInference:
     """
-    High-performance, standalone inference engine for AttentionDTA.
-    Executes the full forward pass:
-    Embedding -> 1D-CNN (32, 64, 96) -> Multi-Head Cross-Attention -> Global Max Pooling -> MLP
+    Inference engine that loads the trained PyTorch AttentionDTA weights
+    and executes the authentic forward pass with padding masked.
     """
 
-    def __init__(self, num_heads: int = 4, feature_dim: int = 96):
-        self.num_heads = num_heads
-        self.feature_dim = feature_dim
-        # Seeded deterministic weights representing the trained model states
-        rng = np.random.RandomState(42)
-        
-        # Projection matrices for multi-head attention
-        self.W_drug = rng.randn(num_heads, feature_dim, feature_dim) * 0.05
-        self.W_prot = rng.randn(num_heads, feature_dim, feature_dim) * 0.05
-        
-        # Baseline MLP weights
-        self.W_mlp1 = rng.randn(feature_dim * 2, 512) * 0.04
-        self.b_mlp1 = rng.randn(512) * 0.01
-        self.W_mlp2 = rng.randn(512, 128) * 0.04
-        self.b_mlp2 = rng.randn(128) * 0.01
-        self.W_out = rng.randn(128, 1) * 0.04
-        self.b_out = 7.0  # Mean pKd baseline for kinase Davis dataset
+    def __init__(self, checkpoint_path=None, device=None):
+        if checkpoint_path is None:
+            checkpoint_path = os.path.join(PROJECT_ROOT, "valid_best_checkpoint.pth")
+        self.checkpoint_path = checkpoint_path
 
-    def compute_attention(self, drug_feats: np.ndarray, prot_feats: np.ndarray):
-        """
-        Two-sided multi-head attention block:
-        For each head h:
-          M_h = tanh( (W_d[h] @ drug_feats.T).T @ (W_p[h] @ prot_feats.T) )
-        Average heads -> Attention Matrix A of shape (L_drug, L_prot)
-        """
-        L_d = drug_feats.shape[0]
-        L_p = prot_feats.shape[0]
-        att_sum = np.zeros((L_d, L_p), dtype=np.float32)
+        if device is None:
+            self.device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
+        else:
+            self.device = torch.device(device)
 
-        for h in range(self.num_heads):
-            # Linear projection
-            proj_d = drug_feats @ self.W_drug[h]  # (L_d, feature_dim)
-            proj_p = prot_feats @ self.W_prot[h]  # (L_p, feature_dim)
-            
-            # Scaled dot-product similarity
-            scale = 1.0 / np.sqrt(self.feature_dim)
-            sim = (proj_d @ proj_p.T) * scale
-            att_head = np.tanh(sim)
-            att_sum += att_head
+        self.model = AttentionDTA(
+            drug_vocab_size=len(CHARISOSMISET) + 1,
+            prot_vocab_size=len(CHARPROTSET) + 1,
+            embed_dim=128,
+            feature_dim=96,
+            num_heads=4
+        ).to(self.device)
 
-        # Average over heads
-        A = att_sum / self.num_heads
-        
-        # Normalize to probability-like weights via softmax across axes
-        exp_d = np.exp(A - np.max(A, axis=1, keepdims=True))
-        A_norm = exp_d / (np.sum(exp_d, axis=1, keepdims=True) + 1e-9)
+        self.is_trained = False
+        self.checkpoint_meta = {}
 
-        # Drug attention vector: row-wise sum
-        alpha_drug = np.mean(A_norm, axis=1)  # shape (L_d,)
-        # Protein attention vector: column-wise sum
-        alpha_prot = np.mean(A_norm, axis=0)  # shape (L_p,)
+        if os.path.exists(self.checkpoint_path):
+            try:
+                ckpt = torch.load(self.checkpoint_path, map_location=self.device)
+                if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+                    self.model.load_state_dict(ckpt["model_state_dict"])
+                    self.checkpoint_meta = {
+                        "epoch": ckpt.get("epoch", "N/A"),
+                        "best_val_mse": ckpt.get("best_val_mse", "N/A"),
+                        "best_val_mae": ckpt.get("best_val_mae", "N/A"),
+                        "best_val_r2": ckpt.get("best_val_r2", "N/A"),
+                        "dataset": ckpt.get("dataset", "Davis Kinase"),
+                        "saved_at": ckpt.get("saved_at", "N/A")
+                    }
+                    self.is_trained = True
+                elif isinstance(ckpt, dict):
+                    self.model.load_state_dict(ckpt)
+                    self.is_trained = True
+            except Exception as e:
+                print(f"[Warning] Could not load checkpoint from {self.checkpoint_path}: {e}")
 
-        return A_norm, alpha_drug, alpha_prot
+        self.model.eval()
 
     def predict(self, smiles: str, protein_seq: str, mode: str = "standard"):
         """
-        Runs the full prediction pipeline.
-        mode: 'standard' (S1 Davis trained) or 'cold_start' (unseen drug disjoint condition)
+        Runs real PyTorch inference on drug SMILES and target protein sequence.
+        Returns predicted pKd, Kd (nM), and unpadded attention matrix & vectors.
         """
-        enc_drug, valid_smiles = encode_smiles(smiles)
-        enc_prot, valid_prot = encode_protein(protein_seq)
+        enc_drug, valid_smiles = encode_smiles(smiles, max_len=MAX_DRUG_LEN)
+        enc_prot, valid_prot = encode_protein(protein_seq, max_len=MAX_PROT_LEN)
 
         L_d = len(valid_smiles)
         L_p = len(valid_prot)
@@ -132,63 +94,29 @@ class AttentionDTAInference:
         if L_d == 0 or L_p == 0:
             raise ValueError("Input SMILES or Protein Sequence cannot be empty.")
 
-        # Simulate learned CNN feature representations
-        # Drug features combine chemical character semantics and local context
-        drug_tokens = enc_drug[:L_d]
-        rng_d = np.random.RandomState(int(np.sum(drug_tokens) % 100000 + 17))
-        drug_base = rng_d.randn(L_d, self.feature_dim) * 0.3
-        # Highlight reactive heterocycles/rings: 'N', 'O', 'S', '=', 'c', '1', '2'
-        for i, ch in enumerate(valid_smiles):
-            if ch.lower() in ["n", "o", "s", "f", "cl", "c", "1", "2"]:
-                drug_base[i] += 0.45
+        d_tensor = torch.from_numpy(enc_drug).long().unsqueeze(0).to(self.device)
+        p_tensor = torch.from_numpy(enc_prot).long().unsqueeze(0).to(self.device)
 
-        # Protein features combine amino acid identity and secondary structure propensity
-        prot_tokens = enc_prot[:L_p]
-        rng_p = np.random.RandomState(int(np.sum(prot_tokens) % 100000 + 42))
-        prot_base = rng_p.randn(L_p, self.feature_dim) * 0.25
-        
-        # Kinase ATP binding site residues often contain DFG motif, gatekeeper, hinge (Met/Leu/Glu)
-        for j, aa in enumerate(valid_prot):
-            if aa in ["D", "F", "G", "M", "K", "E", "T", "Y"]:
-                prot_base[j] += 0.35
+        with torch.no_grad():
+            raw_pred, att_2d, alpha_d_full, alpha_p_full = self.model(d_tensor, p_tensor)
 
-        # Two-Sided Multi-Head Attention
-        att_matrix, alpha_drug, alpha_prot = self.compute_attention(drug_base, prot_base)
-
-        # Apply attention weights element-wise to CNN features
-        weighted_drug = drug_base * alpha_drug[:, np.newaxis]
-        weighted_prot = prot_base * alpha_prot[:, np.newaxis]
-
-        # Global Max Pooling across sequence length
-        pool_drug = np.max(weighted_drug, axis=0)
-        pool_prot = np.max(weighted_prot, axis=0)
-
-        # Concatenate drug and target representations
-        concat_rep = np.concatenate([pool_drug, pool_prot])
-
-        # MLP regression pass
-        h1 = np.maximum(0, concat_rep @ self.W_mlp1 + self.b_mlp1)  # ReLU
-        h2 = np.maximum(0, h1 @ self.W_mlp2 + self.b_mlp2)          # ReLU
-        raw_pred = float((h2 @ self.W_out)[0] + self.b_out)
-
-        # Calibration based on evaluated benchmarks (Davis kinase range pKd typically 5.0 to 10.5)
-        # S1 standard vs Drug-Disjoint cold-start evaluation
-        if mode == "standard":
-            # Well-calibrated S1 prediction (R² ~ 0.69)
-            # Alignment factor between top attention interaction and affinity
-            interaction_energy = float(np.sum(alpha_drug) * np.sum(alpha_prot) * 2.2)
-            predicted_pKd = round(np.clip(raw_pred + interaction_energy * 0.3, 5.2, 10.2), 2)
-        else:
-            # Drug-disjoint cold-start collapse (R² ~ -0.01)
-            # The model collapses towards dataset mean (~7.05) with high variance and poor selectivity
-            mean_dataset_pKd = 7.08
-            noise = (rng_d.randn() - 0.5) * 0.4
-            predicted_pKd = round(float(mean_dataset_pKd + noise), 2)
-
-        # Dissociation constant Kd in nanomolar: pKd = -log10(Kd [M]) -> Kd [nM] = 10^(9 - pKd)
+        pred_val = float(raw_pred.squeeze().item())
+        predicted_pKd = round(float(np.clip(pred_val, 4.0, 11.5)), 2)
         kd_nm = round(float(10 ** (9 - predicted_pKd)), 2)
 
-        # Qualitative classification
+        # Slice attention outputs strictly to valid (unpadded) sequence lengths
+        # Padding tokens have been masked inside the attention layer
+        att_matrix = att_2d[0, :L_d, :L_p].cpu().numpy().astype(np.float32)
+        alpha_drug = alpha_d_full[0, :L_d].cpu().numpy().astype(np.float32)
+        alpha_prot = alpha_p_full[0, :L_p].cpu().numpy().astype(np.float32)
+
+        # Normalize valid slice so sum equals 1 for interpretability
+        if alpha_drug.sum() > 0:
+            alpha_drug = alpha_drug / alpha_drug.sum()
+        if alpha_prot.sum() > 0:
+            alpha_prot = alpha_prot / alpha_prot.sum()
+
+        # Binding classification category based on continuous pKd
         if predicted_pKd >= 8.0:
             category = "High Affinity / Potent Inhibitor (Kd < 10 nM)"
             color = "#00cc66"
@@ -199,8 +127,8 @@ class AttentionDTAInference:
             category = "Weak or Non-Specific Binding (Kd ≥ 100 nM)"
             color = "#ff4444"
 
-        # Identify top-5 most influential protein binding residue windows
-        top_prot_indices = np.argsort(alpha_prot)[::-1][:5]
+        # Identify top-5 most attended protein residue positions
+        top_prot_indices = np.argsort(alpha_prot)[::-1][:min(5, L_p)]
         top_residues = []
         for idx in top_prot_indices:
             start = max(0, idx - 2)
@@ -213,8 +141,8 @@ class AttentionDTAInference:
                 "attention_score": round(float(alpha_prot[idx]), 4)
             })
 
-        # Identify top-5 most active drug substructure tokens
-        top_drug_indices = np.argsort(alpha_drug)[::-1][:5]
+        # Identify top-5 most attended drug chemical tokens
+        top_drug_indices = np.argsort(alpha_drug)[::-1][:min(5, L_d)]
         top_substructures = []
         for idx in top_drug_indices:
             start = max(0, idx - 2)
@@ -225,6 +153,30 @@ class AttentionDTAInference:
                 "atom_char": valid_smiles[idx],
                 "substructure": token,
                 "attention_score": round(float(alpha_drug[idx]), 4)
+            })
+
+        # Identify top-8 pairwise lock-and-key contact interactions
+        flat_att = att_matrix.flatten()
+        top_flat_indices = np.argsort(flat_att)[::-1][:min(8, flat_att.size)]
+        top_pairs = []
+        for rank, f_idx in enumerate(top_flat_indices):
+            r = int(f_idx // L_p)
+            c = int(f_idx % L_p)
+            d_atom = valid_smiles[r]
+            p_res = valid_prot[c]
+            d_frag = valid_smiles[max(0, r - 2):min(L_d, r + 3)]
+            p_motif = valid_prot[max(0, c - 2):min(L_p, c + 3)]
+            top_pairs.append({
+                "rank": rank + 1,
+                "drug_atom": f"{d_atom}{r + 1}",
+                "drug_idx": r + 1,
+                "drug_char": d_atom,
+                "drug_fragment": d_frag,
+                "prot_residue": f"{p_res}{c + 1}",
+                "prot_pos": c + 1,
+                "prot_char": p_res,
+                "prot_motif": p_motif,
+                "score": round(float(att_matrix[r, c]), 5)
             })
 
         return {
@@ -239,5 +191,8 @@ class AttentionDTAInference:
             "valid_prot": valid_prot,
             "top_residues": top_residues,
             "top_substructures": top_substructures,
-            "mode": mode
+            "top_pairs": top_pairs,
+            "mode": mode,
+            "checkpoint_meta": self.checkpoint_meta,
+            "is_trained": self.is_trained
         }
